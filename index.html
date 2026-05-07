@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glimpse — Lightweight clip recorder for Windows</title>
+<meta name="description" content="An open-source, lightweight Rust-based clip recorder for Windows. No watermark. Hotkey saves the last clip instantly.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: #0c0d10; font-family: 'DM Mono', monospace; }
+  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+  @keyframes fadein { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const ACCENT = '#ffcc00';
+
+const T = {
+  bg:'#0c0d10', panel:'#0f1115', lifted:'#13151c', border:'#1c1f28',
+  accent: ACCENT,
+  green:'#00d67e', yellow:'#f0c060', red:'#ff5f57', amber:'#febc2e',
+  text:'#d4d8e8', mid:'#6b7280', dim:'#353b4a',
+  mono:"'DM Mono', monospace", sans:"'Space Grotesk', sans-serif", syne:"'Syne', sans-serif",
+};
+
+const NAME = 'Glimpse';
+const LC = 'glimpse';
+const VERSION = 'v0.1.0';
+const TAG_LINE_1 = 'Always recording.';
+const TAG_LINE_2 = 'Never in the way.';
+const GITHUB_URL = 'https://github.com/MarcosP49/Glimpse';
+const DOWNLOAD_URL = 'https://github.com/MarcosP49/Glimpse/releases/latest';
+
+function GithubIcon({ size = 14, color = '#fff' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+    </svg>
+  );
+}
+
+function Cursor({ color = T.accent }) {
+  return <span style={{ display:'inline-block', width:7, height:'1.1em', background:color, marginLeft:2, verticalAlign:'text-bottom', animation:'blink 1s step-end infinite' }}></span>;
+}
+
+function WinChrome({ title, children }) {
+  return (
+    <div style={{ background:T.panel, borderRadius:10, overflow:'hidden', border:`1px solid ${T.border}`, boxShadow:'0 24px 64px rgba(0,0,0,0.55)' }}>
+      <div style={{ padding:'10px 14px', background:'#14161c', borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'center', gap:7 }}>
+        {[T.red, T.amber, T.green].map(c => <div key={c} style={{ width:10, height:10, borderRadius:'50%', background:c }}></div>)}
+        <span style={{ fontFamily:T.mono, fontSize:11, color:T.mid, marginLeft:8 }}>{title}</span>
+      </div>
+      <div style={{ padding:'20px 22px' }}>{children}</div>
+    </div>
+  );
+}
+
+function TermLine({ icon, iconColor, text, textColor, isLast }) {
+  return (
+    <div style={{ display:'flex', gap:10, marginBottom:4, animation:'fadein 0.12s ease both', lineHeight:1.65 }}>
+      <span style={{ fontFamily:T.mono, fontSize:12, color:iconColor, minWidth:14, userSelect:'none', flexShrink:0 }}>{icon}</span>
+      <span style={{ fontFamily:T.mono, fontSize:12, color:textColor, whiteSpace:'pre-wrap' }}>
+        {text}{isLast && <Cursor />}
+      </span>
+    </div>
+  );
+}
+
+function useLines(lines) {
+  const [count, setCount] = React.useState(0);
+  React.useEffect(() => {
+    setCount(0);
+    const timers = lines.map((l, i) =>
+      setTimeout(() => setCount(v => Math.max(v, i + 1)), l.delay ?? i * 120)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  return count;
+}
+
+function Slider({ value, min, max, accent, onChange }) {
+  const pct = ((value - min) / (max - min)) * 100;
+  const trackRef = React.useRef(null);
+  const handle = (e) => {
+    if (!trackRef.current) return;
+    const r = trackRef.current.getBoundingClientRect();
+    const c = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    onChange(Math.round(min + c * (max - min)));
+  };
+  return (
+    <div ref={trackRef}
+      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); handle(e); }}
+      onPointerMove={e => { if (e.buttons) handle(e); }}
+      style={{ position:'relative', height:18, display:'flex', alignItems:'center', cursor:'pointer' }}>
+      <div style={{ position:'absolute', left:0, right:0, height:4, background:T.lifted, borderRadius:2 }}>
+        <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${pct}%`, background:`linear-gradient(90deg,${accent}88,${accent})`, borderRadius:2 }}></div>
+      </div>
+      <div style={{ position:'absolute', left:`${pct}%`, transform:'translateX(-50%)', width:13, height:13, borderRadius:'50%', background:accent, boxShadow:`0 0 8px ${accent}66`, border:`2px solid ${T.panel}` }}></div>
+    </div>
+  );
+}
+
+function SettingsPanel({ accent }) {
+  const [tab, setTab] = React.useState('settings');
+  const [clipLen, setClipLen] = React.useState(30);
+  const [fps, setFps] = React.useState(60);
+  const [bitrate, setBitrate] = React.useState(60);
+  const [autoStart, setAutoStart] = React.useState(true);
+  const rows = [
+    { key:'clip_length', val:`${clipLen}s`,    value:clipLen, set:setClipLen, min:10, max:120 },
+    { key:'frame_rate',  val:`${fps}fps`,      value:fps,     set:setFps,     min:24, max:120 },
+    { key:'bitrate',     val:`${bitrate}Mbps`, value:bitrate, set:setBitrate, min:10, max:100 },
+  ];
+  return (
+    <div style={{ width:340, background:T.panel, borderRadius:12, overflow:'hidden', border:`1px solid ${T.border}`, boxShadow:`0 32px 80px rgba(0,0,0,0.7)`, fontFamily:T.mono }}>
+      <div style={{ padding:'10px 14px', background:'#14161c', borderBottom:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+          {[T.red, T.amber, T.green].map(c => <div key={c} style={{ width:10, height:10, borderRadius:'50%', background:c }}></div>)}
+          <span style={{ fontSize:11, color:T.mid, marginLeft:8 }}>{LC} — settings</span>
+        </div>
+        <div style={{ display:'flex' }}>
+          {['settings','advanced'].map(t2 => (
+            <button key={t2} onClick={() => setTab(t2)} style={{ padding:'4px 12px', background:'none', border:'none', borderBottom:`2px solid ${tab===t2 ? accent : 'transparent'}`, fontFamily:T.mono, fontSize:11, color: tab===t2 ? T.text : T.dim, cursor:'pointer' }}>{t2}</button>
+          ))}
+        </div>
+      </div>
+      {tab === 'settings' && (
+        <div>
+          {rows.map(row => (
+            <div key={row.key} style={{ padding:'14px 18px', borderBottom:`1px solid ${T.border}` }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
+                <span style={{ fontSize:11, color:T.mid }}>{row.key}</span>
+                <span style={{ fontSize:12, color:accent }}>{row.val}</span>
+              </div>
+              <Slider value={row.value} min={row.min} max={row.max} accent={accent} onChange={row.set} />
+            </div>
+          ))}
+          <div style={{ padding:'14px 18px', borderBottom:`1px solid ${T.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ fontSize:11, color:T.mid }}>hotkey</span>
+            <div style={{ display:'flex', gap:3, alignItems:'center' }}>
+              {['Ctrl','Shift','F8'].map((k,i) => (
+                <React.Fragment key={k}>
+                  {i > 0 && <span style={{ fontSize:10, color:T.dim }}>+</span>}
+                  <span style={{ fontSize:10, color:T.mid, background:T.lifted, border:`1px solid ${T.border}`, borderRadius:3, padding:'2px 6px' }}>{k}</span>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding:'14px 18px', borderBottom:`1px solid ${T.border}` }}>
+            <div style={{ fontSize:11, color:T.mid, marginBottom:8 }}>output_dir</div>
+            <div style={{ fontSize:11, color:T.dim, background:T.lifted, border:`1px solid ${T.border}`, borderRadius:4, padding:'7px 10px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              C:\Users\user\Videos\{NAME}
+            </div>
+          </div>
+          <div style={{ padding:'14px 18px', borderBottom:`1px solid ${T.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ fontSize:11, color:T.mid }}>start_with_windows</span>
+            <div onClick={() => setAutoStart(v => !v)} style={{ width:36, height:20, borderRadius:10, background: autoStart ? accent : T.lifted, border:`1px solid ${autoStart ? accent : T.border}`, position:'relative', cursor:'pointer', transition:'all 0.2s' }}>
+              <div style={{ position:'absolute', top:3, left: autoStart ? 18 : 3, width:12, height:12, borderRadius:'50%', background: autoStart ? T.bg : T.mid, transition:'left 0.2s' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+      {tab === 'advanced' && (
+        <div style={{ padding:'18px' }}>
+          {[['encoder','h264_nvenc'],['container','mp4'],['audio','enabled'],['gpu_accel','auto']].map(([k,v]) => (
+            <div key={k} style={{ display:'flex', justifyContent:'space-between', marginBottom:14 }}>
+              <span style={{ fontSize:11, color:T.mid }}>{k}</span>
+              <span style={{ fontSize:11, color:accent }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ padding:'12px 18px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:T.green, boxShadow:`0 0 6px ${T.green}` }}></div>
+          <span style={{ fontSize:10, color:T.dim }}>running</span>
+        </div>
+        <button style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', background:accent, color:T.bg, fontFamily:T.mono, fontSize:11, fontWeight:500, border:'none', borderRadius:4, cursor:'pointer' }}>
+          <svg width="9" height="9" viewBox="0 0 9 9"><path d="M1 1l7 3.5-7 3.5V1z" fill={T.bg}/></svg>
+          save clip
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const termLines = [
+    { delay:0,    icon:'$', ic:T.accent, tc:T.text,  text:`${LC} --info` },
+    { delay:400,  icon:' ', ic:T.dim,    tc:T.mid,   text:`  ${NAME} — instant hotkey clip recorder` },
+    { delay:560,  icon:' ', ic:T.dim,    tc:T.mid,   text:`  Built in Rust. Always-on background capture.` },
+    { delay:720,  icon:' ', ic:T.dim,    tc:T.mid,   text:`  One hotkey saves the last moment. No fuss.` },
+    { delay:880,  icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:1080, icon:'$', ic:T.accent, tc:T.text,  text:`${LC} --features` },
+    { delay:1400, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:1500, icon:'✓', ic:T.green,  tc:T.text,  text:'hotkey-clip' },
+    { delay:1600, icon:' ', ic:T.dim,    tc:T.mid,   text:`  Save the last N seconds instantly on keypress.` },
+    { delay:1760, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:1840, icon:'✓', ic:T.green,  tc:T.text,  text:'lightweight' },
+    { delay:1940, icon:' ', ic:T.dim,    tc:T.mid,   text:`  Built in Rust. Tiny background footprint.` },
+    { delay:2100, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:2180, icon:'✓', ic:T.green,  tc:T.text,  text:'no-watermark' },
+    { delay:2280, icon:' ', ic:T.dim,    tc:T.mid,   text:`  Clean output every time.` },
+    { delay:2440, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:2520, icon:'✓', ic:T.green,  tc:T.text,  text:'open-source [MIT]' },
+    { delay:2620, icon:' ', ic:T.dim,    tc:T.mid,   text:`  Fork it, ship it, no strings.` },
+    { delay:2780, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:2860, icon:'✓', ic:T.green,  tc:T.text,  text:'adjustable-buffer' },
+    { delay:2960, icon:' ', ic:T.dim,    tc:T.mid,   text:`  10s – 120s rolling window, configurable fps + bitrate.` },
+    { delay:3120, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:3380, icon:'$', ic:T.accent, tc:T.text,  text:`${LC} --install` },
+    { delay:3700, icon:' ', ic:T.dim,    tc:T.mid,   text:`  [1] Download .exe from GitHub releases` },
+    { delay:3860, icon:' ', ic:T.dim,    tc:T.mid,   text:`  [2] Run installer, accept UAC prompt` },
+    { delay:4020, icon:' ', ic:T.dim,    tc:T.mid,   text:`  [3] ${NAME} starts with Windows, lives in tray` },
+    { delay:4180, icon:' ', ic:T.dim,    tc:T.dim,   text:'' },
+    { delay:4440, icon:'$', ic:T.accent, tc:T.text,  text:`${LC} --start` },
+    { delay:4940, icon:'●', ic:T.green,  tc:T.green, text:`  ${NAME} is running. Hotkey: Ctrl+Shift+F8` },
+  ];
+  const count = useLines(termLines);
+  const [dlHover, setDlHover] = React.useState(false);
+  const [ghHover, setGhHover] = React.useState(false);
+
+  return (
+    <div style={{ width:'100vw', minHeight:'100vh', background:T.bg, display:'grid', gridTemplateColumns:'380px 1fr' }}>
+      {/* LEFT */}
+      <div style={{ padding:'44px 44px', display:'flex', flexDirection:'column', justifyContent:'space-between', borderRight:`1px solid ${T.border}`, minHeight:'100vh' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span style={{ fontFamily:T.mono, fontSize:12, color:T.text, letterSpacing:'0.04em' }}>{LC}</span>
+          <div style={{ display:'flex', gap:20 }}>
+            <a href="#settings" style={{ fontFamily:T.mono, fontSize:11, color:T.dim, textDecoration:'none' }}>docs</a>
+            <a href={GITHUB_URL+'/releases'} style={{ fontFamily:T.mono, fontSize:11, color:T.dim, textDecoration:'none' }}>releases</a>
+            <a href={GITHUB_URL} style={{ fontFamily:T.mono, fontSize:11, color:T.dim, textDecoration:'none' }}>github</a>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontFamily:T.mono, fontSize:10, color:T.dim, letterSpacing:'0.12em', marginBottom:20 }}>
+            {VERSION} · windows · open source
+          </div>
+          <h1 style={{ fontFamily:T.syne, fontSize:38, fontWeight:700, lineHeight:1.15, letterSpacing:'-0.03em', color:T.text, marginBottom:16 }}>
+            {TAG_LINE_1}<br/>
+            <span style={{ color:T.accent }}>{TAG_LINE_2}</span>
+          </h1>
+          <p style={{ fontFamily:T.sans, fontSize:13, color:T.mid, lineHeight:1.75, maxWidth:300, marginBottom:32 }}>
+            Background clip recorder built in Rust. Hotkey saves the last clip instantly — no lag, no watermark, no subscription.
+          </p>
+          <div style={{ display:'flex', gap:10 }}>
+            <a href={DOWNLOAD_URL}
+              onMouseEnter={() => setDlHover(true)} onMouseLeave={() => setDlHover(false)}
+              style={{ padding:'10px 20px', background: dlHover ? '#ffe14a' : T.accent, color:T.bg, fontFamily:T.mono, fontSize:11, fontWeight:600, letterSpacing:'0.06em', border:'none', borderRadius:5, cursor:'pointer', textDecoration:'none', boxShadow: dlHover ? `0 0 20px ${T.accent}55` : 'none', transition:'all 0.15s' }}>
+              download .exe
+            </a>
+            <a href={GITHUB_URL}
+              onMouseEnter={() => setGhHover(true)} onMouseLeave={() => setGhHover(false)}
+              style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 16px', background:'transparent', color: ghHover ? T.mid : T.dim, fontFamily:T.mono, fontSize:11, border:`1px solid ${ghHover ? T.border : T.dim+'44'}`, borderRadius:5, textDecoration:'none', transition:'all 0.15s' }}>
+              <GithubIcon size={12} color={ghHover ? T.mid : T.dim}/> github
+            </a>
+          </div>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {['zero watermark', 'lightweight', 'MIT licensed'].map(k => (
+            <div key={k} style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontFamily:T.mono, fontSize:10, color:T.dim }}>—</span>
+              <span style={{ fontFamily:T.mono, fontSize:11, color:T.accent }}>{k}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* RIGHT */}
+      <div style={{ padding:'44px 48px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+        <WinChrome title={`${LC} — bash`}>
+          <div style={{ minHeight:340 }}>
+            {termLines.slice(0, count).map((l, i) => (
+              <TermLine key={i} icon={l.icon} iconColor={l.ic} text={l.text} textColor={l.tc} isLast={i === count - 1} />
+            ))}
+            {count === 0 && <Cursor />}
+          </div>
+        </WinChrome>
+        <div style={{ marginTop:12, fontFamily:T.mono, fontSize:10, color:T.dim, textAlign:'right' }}>
+          ~2 MB binary · MIT license · 🦀 rust
+        </div>
+      </div>
+
+      {/* SETTINGS SECTION */}
+      <div id="settings" style={{ gridColumn:'1 / -1', borderTop:`1px solid ${T.border}`, padding:'72px 56px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:80, alignItems:'center' }}>
+        <div>
+          <div style={{ fontFamily:T.mono, fontSize:10, color:T.dim, letterSpacing:'0.12em', marginBottom:20 }}>// settings</div>
+          <h2 style={{ fontFamily:T.syne, fontSize:32, fontWeight:700, lineHeight:1.15, letterSpacing:'-0.03em', color:T.text, marginBottom:16 }}>
+            Configured In<br/>
+            <span style={{ color:T.accent }}>Seconds.</span>
+          </h2>
+          <p style={{ fontFamily:T.sans, fontSize:13, color:T.mid, lineHeight:1.75, maxWidth:340, marginBottom:32 }}>
+            Set your clip length, frame rate, bitrate, and hotkey once. {NAME} stays out of your way after that — no tray popups, no interruptions.
+          </p>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {[['clip_length','10 – 120 seconds'],['frame_rate','24 – 120 fps'],['bitrate','10 – 100 Mbps'],['hotkey','fully remappable']].map(([k, v]) => (
+              <div key={k} style={{ display:'flex', gap:16, alignItems:'baseline' }}>
+                <span style={{ fontFamily:T.mono, fontSize:11, color:T.accent, minWidth:110 }}>{k}</span>
+                <span style={{ fontFamily:T.mono, fontSize:11, color:T.dim }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:'flex', justifyContent:'center' }}>
+          <div style={{ position:'relative' }}>
+            <div style={{ position:'absolute', inset:-40, background:`radial-gradient(ellipse at center, ${T.accent}12 0%, transparent 70%)`, pointerEvents:'none', borderRadius:'50%' }}></div>
+            <SettingsPanel accent={T.accent} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

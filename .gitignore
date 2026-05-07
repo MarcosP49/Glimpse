@@ -1,0 +1,7 @@
+/target
+ffmpeg.exe
+desktop.ini
+*.pdb
+dist/
+installer/*.exe
+installer/Output/
