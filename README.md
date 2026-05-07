@@ -1,18 +1,19 @@
 # Glimpse
 
-A lightweight ShadowPlay-style screen and audio clip tool for Windows. Runs silently in the system tray, keeps a rolling buffer of the last N seconds of your screen, and saves a clip instantly when you press a hotkey.
+A lightweight ShadowPlay-style screen and audio clip tool for Windows. Runs silently in the system tray, keeps a rolling buffer of the last N seconds of your screen, and saves a clip instantly when you press a hotkey. Meant to be optimized for memory usage, consistently using < 350mb memory. 
 
 ---
 
 ## Features
 
-- Continuous ring buffer recording — always captures, saves only when you want
+- Continuous ring buffer recording that only always captures, and saves only when you want
 - Hardware-accelerated encoding via NVENC (falls back to libx264 automatically)
-- WASAPI loopback audio capture — records desktop audio in sync with video
+- WASAPI loopback audio capture, records desktop audio in sync with video
 - Configurable clip length, frame rate, and bitrate
 - Settings overlay with live preview — toggle with the hotkey or tray icon
 - Saves timestamped `.mp4` files to `%USERPROFILE%\Videos\Glimpse`
 - Optional start-with-Windows support
+- Plenty of customization!
 
 ---
 
