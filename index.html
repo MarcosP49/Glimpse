@@ -251,7 +251,7 @@ function App() {
             <span style={{ color:T.accent }}>{TAG_LINE_2}</span>
           </h1>
           <p style={{ fontFamily:T.sans, fontSize:13, color:T.mid, lineHeight:1.75, maxWidth:300, marginBottom:32 }}>
-            Background clip recorder built in Rust. Hotkey saves the last clip instantly — no lag, no watermark, no subscription.
+            Background clip recorder built in Rust. Made to be barebones and optimized for memory usage. Conistent < 350mb memory usage.
           </p>
           <div style={{ display:'flex', gap:10 }}>
             <a href={DOWNLOAD_URL}
@@ -302,7 +302,7 @@ function App() {
             <span style={{ color:T.accent }}>Seconds.</span>
           </h2>
           <p style={{ fontFamily:T.sans, fontSize:13, color:T.mid, lineHeight:1.75, maxWidth:340, marginBottom:32 }}>
-            Set your clip length, frame rate, bitrate, and hotkey once. {NAME} stays out of your way after that — no tray popups, no interruptions.
+            Set your clip length, frame rate, bitrate, and hotkey once, along with customization features. 
           </p>
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {[['clip_length','10 – 120 seconds'],['frame_rate','24 – 120 fps'],['bitrate','10 – 100 Mbps'],['hotkey','fully remappable']].map(([k, v]) => (
