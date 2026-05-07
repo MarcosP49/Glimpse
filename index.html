@@ -255,6 +255,7 @@ function App() {
           </p>
           <div style={{ display:'flex', gap:10 }}>
             <a href={DOWNLOAD_URL}
+              download
               onMouseEnter={() => setDlHover(true)} onMouseLeave={() => setDlHover(false)}
               style={{ padding:'10px 20px', background: dlHover ? '#ffe14a' : T.accent, color:T.bg, fontFamily:T.mono, fontSize:11, fontWeight:600, letterSpacing:'0.06em', border:'none', borderRadius:5, cursor:'pointer', textDecoration:'none', boxShadow: dlHover ? `0 0 20px ${T.accent}55` : 'none', transition:'all 0.15s' }}>
               download .exe
